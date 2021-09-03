@@ -8,7 +8,7 @@ import './app.scss';
 import 'react-toastify/dist/ReactToastify.css';
 import { PolyjuiceHttpProvider } from '@polyjuice-provider/web3';
 import { AddressTranslator } from 'nervos-godwoken-integration';
-
+import * as CompiledContractArtifact from '../../build/contracts/ERC20.json';
 import { InteractToEarnWrapper } from '../lib/contracts/InteractToEarnWrapper';
 import { CONFIG } from '../config';
 
@@ -45,23 +45,35 @@ export function App() {
     const [accounts, setAccounts] = useState<string[]>();
     const [l2Balance, setL2Balance] = useState<bigint>();
     const [addressBalance, setAddressBalance] = useState<number>();
+    const [layer2, setLayer2] = useState<string>();
     const [existingContractIdInputValue, setExistingContractIdInputValue] = useState<string>();
     const [depositValue, setDepositValue] = useState<number | undefined>();
     const [deployTxHash, setDeployTxHash] = useState<string | undefined>();
     const [polyjuiceAddress, setPolyjuiceAddress] = useState<string | undefined>();
+    const [ethereumBalance, setEthereumBalance] = useState<bigint>();
     const [transactionInProgress, setTransactionInProgress] = useState(false);
     const toastId = React.useRef(null);
     const [newStoredNumberInputValue, setNewStoredNumberInputValue] = useState<
         number | undefined
     >();
 
+    const ETHProxyContract = '0x5C3757AbA3A865d66fA31Ed4A0b7eac4C6B9A30D';
+
     useEffect(() => {
+        (async () => {
         if (accounts?.[0]) {
             const addressTranslator = new AddressTranslator();
-            setPolyjuiceAddress(addressTranslator.ethAddressToGodwokenShortAddress(accounts?.[0]));
+            const polyAddress = addressTranslator.ethAddressToGodwokenShortAddress(accounts?.[0])
+            setPolyjuiceAddress(polyAddress);
+
+            const ETHSUDTContract = new web3.eth.Contract(CompiledContractArtifact.abi as never, ETHProxyContract);
+
+            const balanceETH = BigInt(await ETHSUDTContract.methods.balanceOf(polyAddress).call({from: accounts?.[0]}));
+            setEthereumBalance(balanceETH);
         } else {
             setPolyjuiceAddress(undefined);
         }
+    })();
     }, [accounts?.[0]]);
 
     useEffect(() => {
@@ -200,6 +212,10 @@ export function App() {
             if (_accounts && _accounts[0]) {
                 const _l2Balance = BigInt(await _web3.eth.getBalance(_accounts[0]));
                 setL2Balance(_l2Balance);
+
+                const addressTranslator = new AddressTranslator();
+                const newLayer2 = (await addressTranslator.getLayer2DepositAddress(_web3, _accounts[0])).addressString;
+                setLayer2(newLayer2);
             }
         })();
     });
@@ -269,12 +285,25 @@ export function App() {
         </button>
         <br />
         <br />
+        You can also use the Force Bridge using this site here:<br />
+        <a href={`https://force-bridge-test.ckbapp.dev/bridge/Ethereum/Nervos?xchain-asset=0x0000000000000000000000000000000000000000`}target="_blank">
+            Click to go Bridge
+        </a>
+        <br />
+        Use this layer 2 deposit address and use this as the destination address on the force bridge. Come back when your done to see your updated balance below.
+        <br />
+        <br />
+        The Layer 2 Deposit Address: <b>{layer2 || ' - '}</b>
         <hr />
         Now your wallet details
         Your ETH address: <b>{accounts?.[0]}</b>
         <br />
         <br />
         Your Polyjuice address: <b>{polyjuiceAddress || ' - '}</b>
+        <br />
+        <br />
+        Nervos Layer 2 ETH balance:{' '}
+        <b>{ethereumBalance ? ((Number (ethereumBalance) / (10 ** 18))).toString () : <LoadingIndicator/>}ETH</b>
         <br />
         <br />
         Nervos Layer 2 balance:{' '}
